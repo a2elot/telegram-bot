@@ -145,4 +145,4 @@ def main():
     application.run_polling()  # Automatically handles the event loop for you
 
 if __name__ == '__main__':
-    main()import
+    main(); import something
