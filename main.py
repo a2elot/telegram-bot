@@ -1,148 +1,161 @@
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters
+import telebot
+from telebot import types
+import json
 
-# User data storage (Replace this with a database in real use)
-user_data = {}
+# 🔹 Replace with your BotFather token
+TOKEN = "YOUR_BOT_TOKEN"
+bot = telebot.TeleBot(TOKEN)
 
-# Define VIP levels based on investment amounts
-VIP_STATUS = {
-    '399': 'VIP 1', '599': 'VIP 2', '999': 'VIP 3', '1999': 'VIP 4', '9999': 'VIP 5'
+# 🔹 Store user data (In a real app, use a database)
+users = {}
+
+# 🔹 Investment packages and VIP levels
+investment_plans = {
+    "Starter Plan": {"amount": 399, "days": 40, "daily_return": 133, "vip": "VIP 1"},
+    "LT Smart Plan": {"amount": 599, "days": 60, "daily_return": 233, "vip": "VIP 2"},
+    "Elite Plan": {"amount": 999, "days": 40, "daily_return": 424, "vip": "VIP 3"},
+    "Premium Plan": {"amount": 1999, "days": 30, "daily_return": 999, "vip": "VIP 4"},
+    "Great Package": {"amount": 9999, "days": 30, "daily_return": 2666, "vip": "VIP 5"},
 }
 
-SMART_PACKAGES = {
-    'Package 1': {'price': 99, 'return': 299},
-    'Package 2': {'price': 299, 'return': 599},
-    'Package 3': {'price': 499, 'return': 999},
-    'Package 4': {'price': 999, 'return': 1999},
-    'Package 5': {'price': 1999, 'return': 3999},
-    'Package 6': {'price': 4999, 'return': 9999},
-    'Package 7': {'price': 9999, 'return': 29999}
-}
+# 🔹 Load user data from file (if exists)
+try:
+    with open("users.json", "r") as f:
+        users = json.load(f)
+except FileNotFoundError:
+    users = {}
 
-LONG_TERM_PACKAGES = {
-    'Starter Plan': {'price': 399, 'duration': 40, 'daily_return': 133},
-    'LT Smart Plan': {'price': 599, 'duration': 60, 'daily_return': 233},
-    'Elite Plan': {'price': 999, 'duration': 40, 'daily_return': 424},
-    'Premium Plan': {'price': 1999, 'duration': 30, 'daily_return': 999},
-    'Great Package': {'price': 9999, 'duration': 30, 'daily_return': 2666}
-}
+# 🔹 Save user data function
+def save_users():
+    with open("users.json", "w") as f:
+        json.dump(users, f, indent=4)
 
-# Start command
-async def start(update, context):
-    user = update.message.from_user
-    user_data[user.id] = {'name': user.first_name, 'investments': [], 'vip_status': None}
-    
-    keyboard = [
-        [InlineKeyboardButton("📈 Smart Packages", callback_data='smart_packages')],
-        [InlineKeyboardButton("⏳ Long Term Packages", callback_data='long_term_packages')],
-        [InlineKeyboardButton("📊 Track Progress", callback_data='track_progress')],
-        [InlineKeyboardButton("📞 Contact Support", callback_data='contact_support')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(f"Welcome {user.first_name}! Start your investment journey with us.", reply_markup=reply_markup)
-
-# Handle button clicks
-async def button(update, context):
-    query = update.callback_query
-    await query.answer()
-
-    user = query.from_user
-
-    if query.data == 'smart_packages':
-        show_smart_packages(query)
-    elif query.data == 'long_term_packages':
-        show_long_term_packages(query)
-    elif query.data == 'track_progress':
-        show_progress(query, user)
-    elif query.data == 'contact_support':
-        await query.edit_message_text(text="📞 Contact Support:\nEmail: elivexinvest@gmail.com\nTelegram: @a2elot")
-
-# Show smart packages
-async def show_smart_packages(query):
-    keyboard = []
-    for package, details in SMART_PACKAGES.items():
-        price = details['price']
-        keyboard.append([InlineKeyboardButton(f"{package} - ₹{price}", callback_data=f"pay_smart_{price}")])
-
-    keyboard.append([InlineKeyboardButton("🔙 Back to Menu", callback_data='back_to_menu')])
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.edit_message_text(text="💰 Choose a Smart Package to invest in:", reply_markup=reply_markup)
-
-# Show long-term packages
-async def show_long_term_packages(query):
-    keyboard = []
-    for package, details in LONG_TERM_PACKAGES.items():
-        price = details['price']
-        duration = details['duration']
-        keyboard.append([InlineKeyboardButton(f"{package} - ₹{price} for {duration} days", callback_data=f"pay_long_{price}")])
-
-    keyboard.append([InlineKeyboardButton("🔙 Back to Menu", callback_data='back_to_menu')])
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.edit_message_text(text="💰 Choose a Long-Term Package to invest in:", reply_markup=reply_markup)
-
-# Show payment gateway with your correct UPI ID
-async def payment_gateway(update, context):
-    query = update.callback_query
-    await query.answer()
-    data = query.data.split('_')
-    package_type = data[1]
-    price = int(data[2])
-
-    payment_message = (
-        f"📢 To invest in this package, please make a payment of ₹{price}.\n\n"
-        "✅ Payment Methods:\n"
-        f"1️⃣ UPI: aielotshyam-1@oksbi\n"
-        "📤 After payment, send a screenshot as proof."
-    )
-
-    user_data[query.from_user.id]['pending_payment'] = price  # Store payment amount
-    await query.edit_message_text(payment_message)
-
-# Handle payment proof submission
-async def receive_payment_proof(update, context):
-    user = update.message.from_user
-    if user.id in user_data and 'pending_payment' in user_data[user.id]:
-        price = user_data[user.id]['pending_payment']
-        user_data[user.id]['vip_status'] = VIP_STATUS.get(str(price), 'VIP 1')
-        del user_data[user.id]['pending_payment']  # Clear pending payment
-
-        await update.message.reply_text(
-            "✅ Payment received! Your investment has been processed.\n"
-            f"🎖 VIP Status: {user_data[user.id]['vip_status']}"
-        )
+# 🔹 Start command (Register user)
+@bot.message_handler(commands=['start'])
+def start(message):
+    chat_id = message.chat.id
+    if chat_id not in users:
+        users[chat_id] = {"name": "", "bank_details": "", "investment": None, "vip": None, "balance": 0}
+        bot.send_message(chat_id, "Welcome! Please enter your name to register:")
     else:
-        await update.message.reply_text("⚠️ No pending payments found.")
+        bot.send_message(chat_id, "Welcome back! Use /menu to see options.")
 
-# Show investment progress
-async def show_progress(query, user):
-    investments = user_data.get(user.id, {}).get('investments', [])
-    if not investments:
-        await query.edit_message_text(text="📉 You haven't made any investments yet.")
+# 🔹 Register name
+@bot.message_handler(func=lambda message: message.chat.id in users and users[message.chat.id]["name"] == "")
+def register_name(message):
+    chat_id = message.chat.id
+    users[chat_id]["name"] = message.text
+    save_users()
+    bot.send_message(chat_id, f"Thanks, {message.text}! Now, use /add_bank to enter your bank details.")
+
+# 🔹 Register bank details before investing
+@bot.message_handler(commands=['add_bank'])
+def add_bank_details(message):
+    chat_id = message.chat.id
+    bot.send_message(chat_id, "Please enter your bank account details:")
+    bot.register_next_step_handler(message, save_bank_details)
+
+def save_bank_details(message):
+    chat_id = message.chat.id
+    users[chat_id]["bank_details"] = message.text
+    save_users()
+    bot.send_message(chat_id, "✅ Bank details saved! Now you can invest. Use /menu to proceed.")
+
+# 🔹 Show menu
+@bot.message_handler(commands=['menu'])
+def menu(message):
+    chat_id = message.chat.id
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    buttons = ["📈 Invest", "📊 My Progress", "💸 Withdraw", "❓ FAQs"]
+    for btn in buttons:
+        markup.add(types.KeyboardButton(btn))
+    bot.send_message(chat_id, "Choose an option:", reply_markup=markup)
+
+# 🔹 Handle menu options
+@bot.message_handler(func=lambda message: message.text in ["📈 Invest", "📊 My Progress", "💸 Withdraw", "❓ FAQs"])
+def handle_menu(message):
+    chat_id = message.chat.id
+    if message.text == "📈 Invest":
+        invest(chat_id)
+    elif message.text == "📊 My Progress":
+        show_progress(chat_id)
+    elif message.text == "💸 Withdraw":
+        withdraw(chat_id)
+    elif message.text == "❓ FAQs":
+        faqs(chat_id)
+
+# 🔹 Investment options (Checks if bank details exist)
+def invest(chat_id):
+    if not users[chat_id]["bank_details"]:
+        bot.send_message(chat_id, "⚠️ You must add your bank details before investing! Use /add_bank.")
+        return
+    
+    markup = types.InlineKeyboardMarkup()
+    for plan, details in investment_plans.items():
+        markup.add(types.InlineKeyboardButton(f"{plan} - ₹{details['amount']}", callback_data=f"invest_{plan}"))
+    bot.send_message(chat_id, "Choose an investment plan:", reply_markup=markup)
+
+# 🔹 Handle investment selection
+@bot.callback_query_handler(func=lambda call: call.data.startswith("invest_"))
+def confirm_investment(call):
+    chat_id = call.message.chat.id
+    plan_name = call.data.replace("invest_", "")
+    
+    if users[chat_id]["investment"]:
+        bot.send_message(chat_id, "You already have an active investment!")
+        return
+    
+    plan = investment_plans[plan_name]
+    users[chat_id]["investment"] = {"plan": plan_name, "amount": plan["amount"], "days_left": plan["days"], "daily_return": plan["daily_return"]}
+    users[chat_id]["vip"] = plan["vip"]
+    save_users()
+    
+    bot.send_message(chat_id, f"Investment confirmed! You've chosen {plan_name}. Please send proof of payment.")
+
+# 🔹 Show progress
+def show_progress(chat_id):
+    user = users.get(chat_id, {})
+    if not user["investment"]:
+        bot.send_message(chat_id, "You haven't invested yet. Use /menu to start.")
         return
 
-    progress_message = "📊 Your Investment Progress:\n"
-    for investment in investments:
-        progress_message += f"\n📌 Package: {investment['package']}\n💸 Invested: ₹{investment['amount']}\n💰 Return: ₹{investment['return_value']}"
+    invest_details = user["investment"]
+    msg = f"💰 **Investment Details:**\n📦 Plan: {invest_details['plan']}\n💵 Amount: ₹{invest_details['amount']}\n📅 Days Left: {invest_details['days_left']}\n💸 Daily Return: ₹{invest_details['daily_return']}"
+    bot.send_message(chat_id, msg)
 
-    await query.edit_message_text(progress_message)
+# 🔹 Withdraw function (auto-transfer after cycle ends)
+def withdraw(chat_id):
+    user = users.get(chat_id, {})
+    if not user["investment"]:
+        bot.send_message(chat_id, "No active investment. Use /menu to start.")
+        return
+    
+    if user["investment"]["days_left"] > 0:
+        bot.send_message(chat_id, "You can withdraw after the cycle ends.")
+    else:
+        earned = user["investment"]["amount"] * 2  # Example: Double the investment
+        users[chat_id]["balance"] += earned
+        users[chat_id]["investment"] = None
+        save_users()
+        bot.send_message(chat_id, f"₹{earned} has been sent to your bank account!")
 
-# Back to Menu
-async def back_to_menu(update, context):
-    query = update.callback_query
-    await query.answer()
-    await start(update, context)
+# 🔹 FAQs section
+def faqs(chat_id):
+    faq_text = """
+❓ **Frequently Asked Questions** ❓
 
-# Main function to start the bot
-def main():
-    application = Application.builder().token('7517200911:AAGUoLfnAQHiwK3u6y8prNXFCD8sIFLVb6U').build()
+🔹 **How do I receive my money?**  
+After adding your bank account, payments are auto-transferred once the cycle ends.
 
-    application.add_handler(CommandHandler('start', start))
-    application.add_handler(CallbackQueryHandler(button))
-    application.add_handler(CallbackQueryHandler(payment_gateway, pattern='^pay_.*'))
-    application.add_handler(CallbackQueryHandler(back_to_menu, pattern='^back_to_menu'))
-    application.add_handler(MessageHandler(filters.PHOTO, receive_payment_proof))  # Payment proof handling
+🔹 **Can I upgrade my plan?**  
+Yes, after completing one cycle, you can choose a higher plan.
 
-    application.run_polling()  # Automatically handles the event loop for you
+🔹 **How long does payment verification take?**  
+It is verified manually. Please be patient.
 
-if __name__ == '__main__':
-    main(); import something
+If you need help, contact **@a2elot**.
+"""
+    bot.send_message(chat_id, faq_text)
+
+# 🔹 Run the bot
+bot.polling(none_stop=True)
