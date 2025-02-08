@@ -1,7 +1,7 @@
-# ElivexIND Telegram Bot  
+# ElivexInvest Telegram Bot  
 
 ## 📌 Description  
-ElivexIND is an investment management Telegram bot that allows users to invest in various packages, track returns, and withdraw funds automatically to their bank accounts.  
+Elivex is an investment management Telegram bot that allows users to invest in various packages, track returns, and withdraw funds automatically to their bank accounts.  
 
 ## 🚀 Features  
 ✅ Investment in **Smart Packages** & **Long-Term Packages**  
